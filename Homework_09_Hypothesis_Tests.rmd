@@ -1,0 +1,227 @@
+---
+title: "Hypothesis Tests"
+output:
+  html_document:
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+library(infer)
+
+# Some of R's default displays for numbers don't consistently show decimal places.
+# This global option will help display numbers more uniformly.
+options(digits = 6)
+```
+
+### Overview
+
+The purpose of this worksheet is to use R to compute Hypothesis Test results, both using core R functions such as `t.test()` which implement theory-based tests, and the Infer package which implements simulation-based tests. 
+
+**Note:** This HW uses data that has been analyzed in previous HW assignments. Feel free to re-use any applicable code from your previous work or my solutions.  
+
+__Requirement:__ 
+The HTML export should show all code that you use for each exercise.  
+
+### Exercise 1
+
+This Exercise uses the same data that was used in Exercise #2 from the Confidence Intervals homework and Exercise #1 from the Bootstrap HW. Consider this data to be a random sample representing a population with unknown mean.
+
+```{r, message = FALSE, warning = FALSE}
+gss_survey <- read_csv("http://www.cknuckles.com/statsprogramming/data/gss_survey_data.csv")
+
+gss <- gss_survey %>%
+  filter(year == "2016") %>%
+  select(tvhours) %>% 
+  drop_na(tvhours)
+gss
+#qplot(gss$tvhours, geom = "histogram")
+```
+
+#### A
+
+Two-Sided Hypothesis test:
+
+- Null Hyp: mu=2.13
+- Confidence Level: 98%
+
+The x-bar centered 98% confidence interval for the unknown population mean was computed in previous homework assignments to be approximately `[2.117 , 2.399]`
+
+>
+Can you resolve the above Hypothesis Test using that CI. Briefly explain.   Yes
+
+#### B
+
+For the hypothesis test outlined in part A, manually compute the following, storing the results into variables and then printing them.
+
+- The Critical Values for the test
+- The value of the T test statistic
+
+```{r}
+gss %>%
+  summarize(
+    boot_dist_mean = mean(tvhours),
+    boot_dist_SE = sd(tvhours) 
+  )
+
+
+t_test_stat <- (2.2581	 - 2.13)/(1.87676/sqrt(957))
+t_test_stat
+
+
+```
+
+>
+Using these values, justify a conclusion to the Hypothesis Test. 
+
+#### C
+
+For the hypothesis test outlined in part A, manually compute the following, storing the results into a variable and then printing it.
+
+- The p-value
+```{r}
+p_value <- 2 * pt(-2.111531, df = 956)   # 2 * single tail area p/2
+p_value
+
+```
+>
+Using this value, justify a conclusion to the Hypothesis Test. Reject the null H that the mean in 2.13
+
+#### D
+
+Perform the same Two-Sided Hypothesis test as in part A, but use the core R `t.test()` function instead of manually computing values as in the above parts).  Note: The p-value should match part C.
+
+```{r}
+t.test(gss$tvhours, alternative = "two.sided", mu = 2.13 , conf.level = 0.98)
+p_value <- 2 * pt(-2.111, df=956)   # 2 * single tail area p/2
+p_value
+```
+
+
+#### E
+
+Again using the the core R `t.test()` function, do a similar Hypothesis test as in part, but make this one a **One-Sided** Hypothesis test:
+
+- Null Hyp: mu=2.13
+- Alt  Hyp: mu>2.13   (are people watching more tv than a previous estimate of 2.13 hours)
+- Confidence Level: 98%
+
+```{r}
+t.test(gss$tvhours, alternative = "greater", mu = 2.13 , conf.level = 0.98)
+
+```
+
+>
+Comment on the implications of the one-sided result vs the two-sided result. 
+the one sided result further strengthends the assertion to reject the null H
+
+### Exercise 2
+
+Use the same `tvhours_2016` data as in Exercise #1.  Recall from the histogram of this data (Bootstrap HW #1A) that the data appears significantly skewed, meaning that simulation would likely provide a more reliable test than a theory-based approach. 
+
+Perform the same Two-Sided Hypothesis test as in #1A above, but this time use the `Infer` package to perform a simulated Bootstrap test. Your code should output the p-value of the test.
+
+
+```{r}
+gss %>%
+  specify(response = tvhours) %>%
+  hypothesize(null = "point", mu = 2.13) %>%
+  calculate(stat = "mean")
+t_test_stat <- (2.2581	 - 2.13)/(1.87676/sqrt(957))
+t_test_stat
+p_value <- 2 * pt(-2.111, df=956)   # 2 * single tail area p/2
+p_value
+```
+
+> 
+What's your conclusion to exercise #2?
+
+
+### Exercise 3
+
+This exercise uses the same data and `workaholics` concept that was used in Exercise #1 from the Confidence Intervals homework and Exercise #2 from the Bootstrap HW. Consider this data to be a random sample representing a population with unknown proportion of workaholics.
+
+Use the `Infer` package to perform a simulated Random Draw test. Your code should output the p-value of the test.
+
+One-sided Hypothesis test:
+
+- Null Hyp: p=.27
+- Alt  Hyp: p<.27   (are there fewer workaholics than a previous estimate of 27%)
+- Confidence Level: 90%
+
+```{r}
+workhour <- gss_survey %>%
+  filter(year == "2016") %>%
+  select(workhours) %>%
+  drop_na(workhours)
+workhour
+
+wrangled <- workhour %>%
+  mutate(holic = (workhours> 49))
+wrangled
+
+work <- wrangled %>%
+  specify(response = holic, success = "TRUE") %>%
+  hypothesize(null = "point", p = .27) %>%       # The NULL HYP          
+  generate(reps = 10000, type="draw") %>%        # Random Draw Null Distribution
+  calculate(stat = "prop") %>%
+  summarize(
+    boot_dist_mean = mean(stat),
+    boot_dist_SE = sd(stat) 
+  ) 
+work%>%
+  get_p_value(obs_stat = 0.269835 , direction = "less")
+
+```
+
+> 
+What's your conclusion to exercise #3? Reject the null H
+
+
+### Exercise 4
+
+This exercise uses the same Hobbit sample data from Exercise 4 from the Confidence Intervals HW.
+ 
+Use the `Infer` package to perform a simulated Permutation Re-sample test. Your code should output the p-value of the test.
+
+Two-sided Hypothesis test:
+
+- Null Hyp: Male and female Hobbits have the same heights on average.
+- Confidence Level: 95%
+
+Note: If a 10,000 iteration simulation is too slow on your computer, back off and do 5,000 or whatever. 
+
+```{r, message = FALSE, warning = FALSE}
+hobbit_sample <- read_csv("http://www.cknuckles.com/math250/data/hobbit_sample.csv")
+hobbit_sample
+
+
+
+sample = hobbit_sample %>%
+  pivot_longer(cols = c(male, female), names_to = "gender", 
+               values_to = "heights")
+
+
+
+permutation_re_samples <- sample  %>%
+  specify(response = heights, explanatory = gender) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 10000, type = "permute")
+
+permutation_re_samples %>%
+  group_by(gender) %>%
+  summarize(n = n(), mean_rating = mean(heights), std_dev = sd(heights))
+
+permutation_re_samples %>%
+  get_p_value(obs_stat = 39.1489 - 38.7667, direction = "two-sided")
+
+```
+
+> 
+What's your conclusion to exercise #4?  Rejects the null hypothesis
+
+
+
